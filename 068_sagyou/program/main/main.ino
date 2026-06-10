@@ -1,7 +1,7 @@
 const int sensorPin = A0;
 const int ledPin = 13;
 const int threshold = 600; // テストで確定したしきい値
-const int targetCount = 6; // 担当楽器の起動に必要な点滅回数
+const int targetCount = 21; // 担当楽器の起動に必要な点滅回数
 
 boolean isLightOn = false;
 int currentCount = 0;
