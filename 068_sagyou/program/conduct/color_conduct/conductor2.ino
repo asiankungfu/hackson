@@ -1,7 +1,7 @@
 // ピン定義
 const int POT_PIN = A0; // 可変抵抗
-const int BLUE_PIN = 3; // 青LED（PWM）
-const int RED_PIN = 5;  // 赤LED（PWM）
+const int BLUE_PIN = 12; // 青LED（PWM）
+const int RED_PIN = 13;  // 赤LED（PWM）
 // 緑は使用しない
 int lastPotValue = 0;
 
