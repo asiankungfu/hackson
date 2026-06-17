@@ -1,5 +1,5 @@
 const int LED_PIN = 7;
-const int BTN_PIN = 4;
+const int BTN_PIN =12;
 
 bool isRunning = false; // 点滅ループが動いているかどうかのフラグ
 
