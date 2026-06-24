@@ -5,7 +5,7 @@ import processing.serial.*;
 
 Minim minim;
 AudioOutput out;
-WaveVisualizer vis;   // ビジュアライザー用
+//WaveVisualizer vis;   // ビジュアライザー用
 Serial myPort;        // シリアル通信用
 boolean hasPlayed = false; // 既に演奏したか？を記憶するフラグ
 
@@ -34,14 +34,14 @@ void setup() {
 void draw() {
   background(0);
   // 「音の担当」が鳴らしている out を、「見た目の担当」に渡して描画
-  vis.drawWave(out); 
+  //vis.drawWave(out); 
 
   // 波形描画
-  stroke(0, 255, 0);
-  strokeWeight(2);
-  for(int i = 0; i < out.bufferSize() - 1; i++) {
-    line(i, 150 + out.left.get(i)*100, i+1, 150 + out.left.get(i+1)*100);
-  }
+  //stroke(0, 255, 0);
+  //strokeWeight(2);
+  //for(int i = 0; i < out.bufferSize() - 1; i++) {
+  //  line(i, 150 + out.left.get(i)*100, i+1, 150 + out.left.get(i+1)*100);
+  //}
   
   // 状態に合わせて文字色を変更
   if (hasPlayed == false) {
