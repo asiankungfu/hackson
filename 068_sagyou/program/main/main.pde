@@ -5,20 +5,9 @@ import processing.serial.*;
 
 Minim minim;
 AudioOutput out;
+WaveVisualizer vis;   // ビジュアライザー用
 Serial myPort;        // シリアル通信用
 boolean hasPlayed = false; // 既に演奏したか？を記憶するフラグ
-
-// テンポ制御
-float currentTempo = 120;  // 現在のテンポ(BPM)
-float targetTempo  = 120;  // カラーセンサーから指示されたテンポ
-
-// カラーセンサー設定
-final int COLOR_MIN   = 0;    // センサー最小値（青に相当）
-final int COLOR_MAX   = 1023; // センサー最大値（赤に相当）
-final int COLOR_MID   = 512;  // 無色（通常）に相当する中央値
-final float TEMPO_MIN = 60;   // 青のとき最低テンポ
-final float TEMPO_MID = 120;  // 無色のとき通常テンポ
-final float TEMPO_MAX = 200;  // 赤のとき最高テンポ
 
 void setup() { 
   size(600, 300);     // ウィンドウサイズ統一
@@ -39,88 +28,44 @@ void setup() {
     new float[] {1.0f, 0.0f, 0.32f, 0.2f, 0.1f}
   );
   
-  myPort.bufferUntil('\n'); // '\n' を受信したら serialEvent を呼ぶ
+  vis = new WaveVisualizer(out);
 }
 
 void draw() {
   background(0);
+  // 「音の担当」が鳴らしている out を、「見た目の担当」に渡して描画
+  vis.drawWave(out); 
 
-  // テンポをなめらかに追従（毎フレーム 1BPM ずつ近づける）
-  if (abs(currentTempo - targetTempo) > 1.0) {
-    currentTempo += (targetTempo - currentTempo) * 0.05;
-    out.setTempo(currentTempo);
+  // 波形描画
+  stroke(0, 255, 0);
+  strokeWeight(2);
+  for(int i = 0; i < out.bufferSize() - 1; i++) {
+    line(i, 150 + out.left.get(i)*100, i+1, 150 + out.left.get(i+1)*100);
   }
-
-  // ─── テンポに応じた色 ───
-  // 青(遅)→白(中)→赤(早) でグラデーション表示
-  float t = map(currentTempo, TEMPO_MIN, TEMPO_MAX, 0, 1);
-  color barColor;
-  if (t < 0.5) {
-    // 青 → 白
-    float f = t * 2;
-    barColor = color(lerp(50, 255, f), lerp(100, 255, f), lerp(255, 255, f));
-  } else {
-    // 白 → 赤
-    float f = (t - 0.5) * 2;
-    barColor = color(lerp(255, 255, f), lerp(255, 80, f), lerp(255, 80, f));
-  }
-
-  // テンポバー（画面下部）
-  noStroke();
-  fill(40);
-  rect(0, height - 30, width, 30);
-  fill(barColor);
-  rect(0, height - 30, width * t, 30);
-
-  // テキスト表示
-  fill(255);
-  textSize(14);
-  text("Tempo: " + nf(currentTempo, 0, 1) + " BPM", 10, height - 10);
-
+  
+  // 状態に合わせて文字色を変更
   if (hasPlayed == false) {
-    fill(200);
+    fill(255);
   } else {
-    fill(255, 120, 120);
+    fill(255, 100, 100); // 再生後は赤文字にする
   }
-  textSize(14);
-  text(hasPlayed ? "Status: Played  [R] to Reset" : "Status: Waiting for Arduino...", 10, 20);
+  
+  // 目標回数表示を 5 flashes に修正
+  text(hasPlayed ? "Status: Played (Press 'R' to Reset)" : "Status: Waiting for Arduino (5 flashes)", 20, 30);
 }
 
-// シリアル信号割り込み
+// シリアル信号割り込み（実行可能コードと同じロジックに統一）
 void serialEvent(Serial p) {
-  String line = p.readStringUntil('\n');
-  if (line == null) return;
-  line = trim(line);
+  int inByte = p.read();
+  println("received byte: " + inByte);
 
-  // ── カラーセンサーデータ「C:<値>」 ──
-  if (line.startsWith("C:")) {
-    int colorVal = int(line.substring(2));
-    colorVal = constrain(colorVal, COLOR_MIN, COLOR_MAX);
-
-    // 中央(512)を境に青→通常→赤へマッピング
-    if (colorVal <= COLOR_MID) {
-      // 青側: 値が小さいほど遅い
-      targetTempo = map(colorVal, COLOR_MIN, COLOR_MID, TEMPO_MIN, TEMPO_MID);
-    } else {
-      // 赤側: 値が大きいほど早い
-      targetTempo = map(colorVal, COLOR_MID, COLOR_MAX, TEMPO_MID, TEMPO_MAX);
-    }
-    println("Color=" + colorVal + "  → targetTempo=" + nf(targetTempo, 0, 1));
-    return;
-  }
-
-  // ── トリガー信号（バイト値 255）──
-  // bufferUntil('\n') 使用中はバイナリ 255 が来たとき readString が空になるため
-  // 生バイトも別途チェックする
-  if (p.available() > 0) {
-    int inByte = p.read();
-    if (inByte == 255 && hasPlayed == false) {
-      println("START received");
-      playSong();
-      hasPlayed = true;
-    } else if (inByte == 255) {
-      println("演奏中なのでSTARTを無視しました");
-    }
+  if (inByte == 255 && hasPlayed == false) {
+    println("START received");
+    playSong();
+    hasPlayed = true; 
+  } 
+  else if (inByte == 255 && hasPlayed == true) {
+    println("演奏中なのでSTARTを無視しました");
   }
 }
 
@@ -145,9 +90,7 @@ void keyPressed() {
 void resetPlayback() {
   out.close();
   out = minim.getLineOut();
-  currentTempo = 120;
-  targetTempo  = 120;
-  out.setTempo(currentTempo);
+  out.setTempo(120);
   hasPlayed = false;
   println(">>> 演奏を停止し、再び待機します。");
 }
