@@ -37,11 +37,11 @@ void draw() {
   //vis.drawWave(out); 
 
   // 波形描画
-  //stroke(0, 255, 0);
-  //strokeWeight(2);
-  //for(int i = 0; i < out.bufferSize() - 1; i++) {
-  //  line(i, 150 + out.left.get(i)*100, i+1, 150 + out.left.get(i+1)*100);
-  //}
+  stroke(0, 255, 0);
+  strokeWeight(2);
+  for(int i = 0; i < out.bufferSize() - 1; i++) {
+    line(i, 150 + out.left.get(i)*100, i+1, 150 + out.left.get(i+1)*100);
+  }
   
   // 状態に合わせて文字色を変更
   if (hasPlayed == false) {
