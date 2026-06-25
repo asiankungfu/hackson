@@ -48,9 +48,9 @@ void setup()
     // 起動確認用に3回素早く点滅
     for (int i = 0; i < 3; i++)
     {
-        digitalWrite(LED_PIN, HIGH);
+        digitalWrite(ledPin, HIGH);
         delay(40);
-        digitalWrite(LED_PIN, LOW);
+        digitalWrite(ledPin, LOW);
         delay(40);
     }
 
