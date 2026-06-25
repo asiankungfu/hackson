@@ -69,6 +69,12 @@ void loop()
                 ;
             delay(20);
 
+            // ボタン入力受付フィードバック（1回点滅）
+            digitalWrite(ledPin, HIGH);
+            delay(80);
+            digitalWrite(ledPin, LOW);
+            delay(80);
+
             // 同じボタンが既に押されていたらリセット
             if (pressed[i])
             {
