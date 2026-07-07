@@ -1,9 +1,8 @@
 // ピン定義
-const int POT_PIN = A0;  // 可変抵抗
-const int BLUE_PIN = 11; // 青LED（PWM）
-const int RED_PIN = 12;  // 赤LED（PWM）
+const int POT_PIN = A0; // 可変抵抗
+const int BLUE_PIN = 3; // 青LED（PWM）
+const int RED_PIN = 5;  // 赤LED（PWM）
 // 緑は使用しない
-int lastPotValue = 0;
 
 // secondConductor.ino
 //
@@ -11,22 +10,23 @@ int lastPotValue = 0;
 // 4つ目を押した瞬間から順番にLEDで光の合図を送る。
 //
 // ボタンと点滅回数の対応:
-//   A (BTN_PINS[0] = pin4) → 1回点滅
-//   B (BTN_PINS[1] = pin3) → 2回点滅
-//   C (BTN_PINS[2] = pin2) → 3回点滅
-//   D (BTN_PINS[3] = pin5) → 4回点滅
+//   A (BTN_PINS[0] = pin9)  → 1回点滅
+//   B (BTN_PINS[1] = pin10) → 2回点滅
+//   C (BTN_PINS[2] = pin11) → 3回点滅
+//   D (BTN_PINS[3] = pin12) → 4回点滅
 
 // ---- 定数 ----
 const int LED_PIN = 7;
-const int ledPin = 13;               // 基盤のLED
-const int BTN_PINS[] = {4, 3, 2, 5}; // A, B, C, D
+const int LED_PIN2 = 8;
+const int ledPin = 13;                  // 基板のLED
+const int BTN_PINS[] = {9, 10, 11, 12}; // A, B, C, D
 const int NUM_BTNS = 4;
-const int BPM = 120; // ここを変えるとテンポが変わる
 
-// BPMから1拍のミリ秒を計算（60000ms / BPM）
-const unsigned long BEAT_MS = 60000UL / BPM;
+// BPMの可変範囲
+const int BPM_MIN = 50;
+const int BPM_MAX = 170;
 
-// 点滅1回あたりのON時間とOFF時間（拍に合わせて調整）
+// 点滅1回あたりのON時間とOFF時間
 const unsigned long BLINK_ON_MS = 150;
 const unsigned long BLINK_OFF_MS = 350;
 
@@ -34,6 +34,10 @@ const unsigned long BLINK_OFF_MS = 350;
 const int WAIT_BEATS = 8;
 
 // ---- グローバル変数 ----
+int currentBPM = 120;
+unsigned long BEAT_MS = 60000UL / 120;
+int lastPotValue = -1; // 初回起動時に必ずLEDを更新させるため -1 に設定
+
 int pressOrder[NUM_BTNS]; // 押された順番にボタンインデックスを記録
 int pressCount = 0;       // 現在何回ボタンが押されたか
 bool pressed[NUM_BTNS];   // 各ボタンが今回のセッションで押されたか
@@ -41,7 +45,8 @@ bool pressed[NUM_BTNS];   // 各ボタンが今回のセッションで押され
 // ---- プロトタイプ宣言 ----
 void resetState();
 void blinkLED(int count);
-void waitBeats(int beats);
+void updatePotentiometer();
+void smartDelay(unsigned long waitTime);
 
 void setup()
 {
@@ -49,11 +54,16 @@ void setup()
     pinMode(BLUE_PIN, OUTPUT);
 
     pinMode(LED_PIN, OUTPUT);
+    pinMode(LED_PIN2, OUTPUT);
+    pinMode(ledPin, OUTPUT);
+
     for (int i = 0; i < NUM_BTNS; i++)
     {
         pinMode(BTN_PINS[i], INPUT_PULLUP);
     }
-    pinMode(ledPin, OUTPUT);
+
+    // 起動直後に一度ボリュームの値を読み込んで反映させる
+    updatePotentiometer();
 
     // 起動確認用に3回素早く点滅
     for (int i = 0; i < 3; i++)
@@ -69,15 +79,21 @@ void setup()
 
 void loop()
 {
-    /// タイミング///
+    // メインループでも常にボリュームを監視
+    updatePotentiometer();
+
+    // ==========================================
+    // ボタン入力のタイミング制御
+    // ==========================================
     for (int i = 0; i < NUM_BTNS; i++)
     {
         if (digitalRead(BTN_PINS[i]) == LOW)
         {
-
             // ボタンが離されるまで待つ（チャタリング防止）
             while (digitalRead(BTN_PINS[i]) == LOW)
-                ;
+            {
+                updatePotentiometer(); // 待っている間もボリューム更新
+            }
             delay(20);
 
             // ボタン入力受付フィードバック（1回点滅）
@@ -109,13 +125,14 @@ void loop()
 
                     unsigned long startMs = millis(); // 点滅開始時刻を記録
                     blinkLED(blinkCount);
+
                     if (j < NUM_BTNS - 1)
                     {
-                        unsigned long elapsed = millis() - startMs;
-                        unsigned long interval = BEAT_MS * WAIT_BEATS;
-                        if (elapsed < interval)
+                        // ★ここがポイント：次の合図までの待機時間を計算しつつ、
+                        // ボリュームが回されたら BEAT_MS をリアルタイムに反映して待機時間を伸縮させる
+                        while (millis() - startMs < (BEAT_MS * WAIT_BEATS))
                         {
-                            delay(interval - elapsed); // 残り時間だけ待つ → 均等拍
+                            updatePotentiometer();
                         }
                     }
                 }
@@ -128,19 +145,27 @@ void loop()
             break;
         }
     }
+}
 
-    /// カラー///
+// ==========================================
+// 可変抵抗の読み取りと、BPM・カラーLEDの更新を行う関数
+// ==========================================
+void updatePotentiometer()
+{
     int potValue = analogRead(POT_PIN); // 0〜1023
 
-    // ノイズ対策（前回より10以上変化があった時だけ処理）
+    // ノイズ対策（前回より2以上変化があった時だけ処理）
     if (abs(potValue - lastPotValue) > 2)
     {
         lastPotValue = potValue; // 前回の値を更新
 
+        // BPMを可変抵抗の値から計算
+        currentBPM = map(potValue, 0, 1023, BPM_MIN, BPM_MAX);
+        BEAT_MS = 60000UL / currentBPM;
+
         int redValue = 0;
         int blueValue = 0;
 
-        // 【左半分】中央(512)より左にあるとき：青LEDだけを光らせる
         // 【左側】500未満のとき、青を制御（500で完全に消える）
         if (potValue < 500)
         {
@@ -164,8 +189,18 @@ void loop()
         analogWrite(RED_PIN, redValue);
         analogWrite(BLUE_PIN, blueValue);
     }
+}
 
-    delay(100);
+// ==========================================
+// 動きを止めずに（ボリュームを監視しながら）待機する関数
+// ==========================================
+void smartDelay(unsigned long waitTime)
+{
+    unsigned long start = millis();
+    while (millis() - start < waitTime)
+    {
+        updatePotentiometer();
+    }
 }
 
 // ---- 状態リセット ----
@@ -184,20 +219,20 @@ void blinkLED(int count)
 {
     for (int j = 0; j < count; j++)
     {
+        // LED_PIN2も一緒に光るように修正
         digitalWrite(LED_PIN, HIGH);
-        delay(BLINK_ON_MS);
+        digitalWrite(LED_PIN2, HIGH);
+
+        // 普通のdelayの代わりに、ボリュームを監視できるsmartDelayを使用
+        smartDelay(BLINK_ON_MS);
+
         digitalWrite(LED_PIN, LOW);
+        digitalWrite(LED_PIN2, LOW);
 
         // 最後の点滅の後はOFF時間を入れない
         if (j < count - 1)
         {
-            delay(BLINK_OFF_MS);
+            smartDelay(BLINK_OFF_MS);
         }
     }
-}
-
-// ---- beats拍分だけ待機する ----
-void waitBeats(int beats)
-{
-    delay(BEAT_MS * beats);
 }
