@@ -13,11 +13,11 @@ const int BTN_PINS[] = {9, 10, 11, 12}; // A, B, C, D
 const int NUM_BTNS = 4;
 
 // ---- BPM・タイミング定数 ----
-const int BPM_MIN = 50;
-const int BPM_MAX = 170;
+const int BPM_MIN = 12;
+const int BPM_MAX = 240;
 const unsigned long BLINK_ON_MS = 150;  // 合図LEDのON時間
 const unsigned long BLINK_OFF_MS = 350; // 合図LEDのOFF時間
-const int WAIT_BEATS = 8;               // 楽器間の待機拍数
+const int WAIT_BEATS = 4;               // 楽器間の待機拍数
 
 // ---- サーボ角度配列（4拍子パターン） ----
 const int BEAT_ANGLES[] = {125, 90, 55, 90}; // 強拍↓ ・ 中央 ・ 弱拍↑ ・ 中央
@@ -133,7 +133,7 @@ void loop()
                 }
 
                 // 2. 追加の演奏時間「34拍」の間、さらに指揮を振り続ける
-                conductWaitBeats(34);
+                conductWaitBeats(16);
 
                 // 全ての指揮・演奏タイムラインが終了したら初期状態へ戻る
                 resetState();
